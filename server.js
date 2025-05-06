@@ -14,8 +14,7 @@ app.use(express.static(path.join(__dirname, "./")));
 
 // MongoDB connection
 const MONGODB_URI =
-  process.env.MONGODB_URI ||
-  "mongodb+srv://visarutsankham:35mydVrXrfLSXeKP@thaipbs-budget-ideas-66.u4ryaqn.mongodb.net/?retryWrites=true&w=majority&appName=thaipbs-budget-ideas-66";
+  process.env.MONGODB_URI || "mongodb://localhost:27017/thaipbs-budget";
 
 mongoose
   .connect(MONGODB_URI)
