@@ -421,30 +421,42 @@
             // Clear previous word cloud
             document.getElementById('wordCloudContainer').innerHTML = '';
 
+            // Ensure words is an array
+            if (!Array.isArray(words)) {
+                words = [];
+                console.warn("Words was not an array - reset to empty array");
+            }
+
             if (words.length === 0) {
                 document.getElementById('wordCloudContainer').innerHTML = '<div class="flex items-center justify-center h-full"><p class="text-gray-500">ยังไม่มีไอเดียที่ส่งเข้ามา โปรดเป็นคนแรกที่แบ่งปันไอเดีย!</p></div>';
+                document.getElementById('ideaCount').textContent = '0';
                 return;
             }
 
-            // Update idea count
-            document.getElementById('ideaCount').textContent = words.reduce((acc, word) => acc + word.value, 0);
+            try {
+                // Update idea count - with safe access
+                document.getElementById('ideaCount').textContent = words.reduce((acc, word) => acc + (word.value || 0), 0);
 
-            // Configure the layout
-            const layout = d3.layout.cloud()
-                .size([cloudWidth, cloudHeight])
-                .words(words.map(d => ({
-                    text: d.text,
-                    size: 10 + (d.value * 5), // Scale font size based on frequency
-                    freq: d.value,
-                    rotate: Math.random() > 0.5 ? 0 : 90 // Random rotation (0° or 90°)
-                })))
-                .padding(5)
-                .font('Kanit')
-                .fontSize(d => d.size)
-                .on('end', draw);
+                // Configure the layout
+                const layout = d3.layout.cloud()
+                    .size([cloudWidth, cloudHeight])
+                    .words(words.map(d => ({
+                        text: d.text || 'ไม่ระบุ',
+                        size: 10 + ((d.value || 1) * 5), // Scale font size based on frequency
+                        freq: d.value || 1,
+                        rotate: Math.random() > 0.5 ? 0 : 90 // Random rotation (0° or 90°)
+                    })))
+                    .padding(5)
+                    .font('Kanit')
+                    .fontSize(d => d.size)
+                    .on('end', draw);
 
-            // Start the layout
-            layout.start();
+                // Start the layout
+                layout.start();
+            } catch (err) {
+                console.error("Error rendering word cloud:", err);
+                document.getElementById('wordCloudContainer').innerHTML = '<div class="flex items-center justify-center h-full"><p class="text-red-500">ข้อผิดพลาดในการแสดงข้อมูล</p></div>';
+            }
 
             // Function to draw the word cloud
             function draw(words) {
@@ -487,18 +499,24 @@
         // Function to fetch ideas from the API
         async function fetchIdeas() {
             try {
-                // Real API call to fetch ideas from MongoDB
-                const response = await fetch('/api/ideas');
+                // Use the full URL to the API endpoint
+                const response = await fetch(window.location.origin + '/api/ideas');
+                if (!response.ok) {
+                    throw new Error(`API responded with status: ${response.status}`);
+                }
                 const data = await response.json();
 
-                // Transform data for word cloud
-                words = data;
+                // Make sure we have an array even if data is null or undefined
+                words = Array.isArray(data) ? data : [];
+                console.log("Fetched ideas:", words);
 
                 // Render the word cloud
                 renderWordCloud();
             } catch (error) {
                 console.error('Error fetching ideas:', error);
-                document.getElementById('wordCloudContainer').innerHTML = '<div class="flex items-center justify-center h-full"><p class="text-red-500">ไม่สามารถโหลดข้อมูลได้</p></div>';
+                // Set words to empty array to avoid reduce errors
+                words = [];
+                document.getElementById('wordCloudContainer').innerHTML = '<div class="flex items-center justify-center h-full"><p class="text-red-500">ไม่สามารถโหลดข้อมูลได้: ' + error.message + '</p></div>';
             }
         }
 
@@ -517,14 +535,15 @@
             }
 
             try {
-                // Real API call to submit idea to MongoDB
-                const response = await fetch('/api/submit', {
+                // Use the full URL to the API endpoint
+                const response = await fetch(window.location.origin + '/api/submit', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ idea })
                 });
 
                 if (!response.ok) {
+                    console.error('Submit response error:', response.status, response.statusText);
                     throw new Error('Failed to submit idea');
                 }
 

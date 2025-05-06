@@ -10,7 +10,10 @@ const PORT = process.env.PORT || 3000;
 // Middleware
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, "./")));
+
+// Serve static files more explicitly - make sure this is before routes
+app.use(express.static(path.join(__dirname)));
+app.use(express.static(path.join(__dirname, "public")));
 
 // MongoDB connection
 const MONGODB_URI =
@@ -52,15 +55,17 @@ app.get("/api/ideas", async (req, res) => {
       { $sort: { count: -1 } },
     ]);
 
-    res.json(
-      ideas.map((item) => ({
-        text: item.idea,
-        value: item.count,
-      }))
-    );
+    // Make sure to return an empty array if no results
+    const result = ideas.map((item) => ({
+      text: item.idea,
+      value: item.count,
+    }));
+
+    console.log("API response:", result);
+    res.json(result);
   } catch (error) {
     console.error("Error fetching ideas:", error);
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({ message: "Server error", error: error.toString() });
   }
 });
 
@@ -68,6 +73,7 @@ app.get("/api/ideas", async (req, res) => {
 app.post("/api/submit", async (req, res) => {
   try {
     const { idea } = req.body;
+    console.log("Received idea submission:", idea);
 
     if (!idea || idea.trim() === "") {
       return res.status(400).json({ message: "Idea cannot be empty" });
@@ -81,7 +87,7 @@ app.post("/api/submit", async (req, res) => {
       .json({ message: "Idea submitted successfully", idea: newIdea });
   } catch (error) {
     console.error("Error submitting idea:", error);
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({ message: "Server error", error: error.toString() });
   }
 });
 
@@ -93,4 +99,5 @@ app.get("*", (req, res) => {
 // Start server
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  console.log(`Static files served from: ${__dirname}`);
 });
