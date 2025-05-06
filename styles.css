@@ -674,3 +674,14 @@ footer {
     height: 300px;
   }
 }
+
+/* Demo Mode Notice */
+.hidden {
+  display: none;
+}
+
+#demoModeTag {
+  font-size: 0.85em;
+  color: #e67e22;
+  font-weight: bold;
+}
