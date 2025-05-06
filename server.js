@@ -15,14 +15,24 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname)));
 app.use(express.static(path.join(__dirname, "public")));
 
+// Track MongoDB connection status
+let isMongoConnected = false;
+
 // MongoDB connection
 const MONGODB_URI =
   process.env.MONGODB_URI || "mongodb://localhost:27017/thaipbs-budget";
 
+console.log("Attempting to connect to MongoDB...");
 mongoose
   .connect(MONGODB_URI)
-  .then(() => console.log("Connected to MongoDB"))
-  .catch((err) => console.error("MongoDB connection error:", err));
+  .then(() => {
+    console.log("Connected to MongoDB");
+    isMongoConnected = true;
+  })
+  .catch((err) => {
+    console.error("MongoDB connection error:", err);
+    isMongoConnected = false;
+  });
 
 // Create Idea Schema and Model
 const ideaSchema = new mongoose.Schema({
@@ -43,6 +53,12 @@ const Idea = mongoose.model("Idea", ideaSchema);
 // Get all ideas (with frequency count)
 app.get("/api/ideas", async (req, res) => {
   try {
+    // If MongoDB isn't connected, return empty array
+    if (!isMongoConnected) {
+      console.log("MongoDB not connected - returning empty ideas array");
+      return res.json([]);
+    }
+
     // Aggregate ideas to count duplicates and sort by frequency
     const ideas = await Idea.aggregate([
       {
@@ -65,13 +81,22 @@ app.get("/api/ideas", async (req, res) => {
     res.json(result);
   } catch (error) {
     console.error("Error fetching ideas:", error);
-    res.status(500).json({ message: "Server error", error: error.toString() });
+    // Return empty array on error to prevent client-side errors
+    res.json([]);
   }
 });
 
 // Submit a new idea
 app.post("/api/submit", async (req, res) => {
   try {
+    // Check MongoDB connection first
+    if (!isMongoConnected) {
+      console.log("MongoDB not connected - can't submit idea");
+      return res.status(503).json({
+        message: "Database currently unavailable. Please try again later.",
+      });
+    }
+
     const { idea } = req.body;
     console.log("Received idea submission:", idea);
 
@@ -89,6 +114,15 @@ app.post("/api/submit", async (req, res) => {
     console.error("Error submitting idea:", error);
     res.status(500).json({ message: "Server error", error: error.toString() });
   }
+});
+
+// Health check endpoint
+app.get("/api/health", (req, res) => {
+  res.json({
+    status: "ok",
+    mongoConnected: isMongoConnected,
+    timestamp: new Date().toISOString(),
+  });
 });
 
 // Serve the HTML file for any other route

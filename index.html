@@ -71,7 +71,7 @@
     <!-- Favicon -->
     <link rel="icon" href="logo-nav.png" type="image/png">
     <!-- Plotly.js CDN -->
-    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.29.1.min.js"></script>
     <!-- Local CSS -->
     <link href="styles.css" rel="stylesheet">
     <!-- Google Fonts -->
@@ -544,7 +544,16 @@
 
                 if (!response.ok) {
                     console.error('Submit response error:', response.status, response.statusText);
-                    throw new Error('Failed to submit idea');
+                    // Try to parse the error message
+                    const errorData = await response.json().catch(() => ({}));
+
+                    if (response.status === 503) {
+                        formMessage.textContent = 'ระบบฐานข้อมูลยังไม่พร้อมใช้งาน โปรดลองอีกครั้งในภายหลัง';
+                    } else {
+                        formMessage.textContent = errorData.message || 'เกิดข้อผิดพลาด โปรดลองอีกครั้ง';
+                    }
+                    formMessage.className = 'form-message error';
+                    return;
                 }
 
                 // Show success message
@@ -565,14 +574,29 @@
 
             } catch (error) {
                 console.error('Error submitting idea:', error);
-                formMessage.textContent = 'เกิดข้อผิดพลาด โปรดลองอีกครั้ง';
+                formMessage.textContent = 'เกิดข้อผิดพลาดในการเชื่อมต่อ โปรดลองอีกครั้ง';
                 formMessage.className = 'form-message error';
             }
         });
 
         // Initial fetch
         document.addEventListener('DOMContentLoaded', function () {
-            fetchIdeas();
+            // First, check the API health
+            fetch(window.location.origin + '/api/health')
+                .then(response => response.json())
+                .then(health => {
+                    console.log('API health status:', health);
+                    if (!health.mongoConnected) {
+                        console.warn('MongoDB is not connected - word cloud will be empty');
+                    }
+                })
+                .catch(err => {
+                    console.error('Health check failed:', err);
+                })
+                .finally(() => {
+                    // Always try to fetch ideas, even if health check fails
+                    fetchIdeas();
+                });
 
             // Resize handling for the word cloud
             window.addEventListener('resize', function () {
