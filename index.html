@@ -271,6 +271,13 @@
                         <div class="table-cell">จัดสรรงบของสภาคองเกรส</div>
                         <div class="table-cell font-bold">1.6 USD/คน</div>
                     </div>
+                    <div class="table-row">
+                        <div class="table-cell font-semibold">Japan – NHK</div>
+                        <div class="table-cell">≈ 4.1 พันล้าน USD (603 bn JPY, FY 2025 plan)<br>(+รายได้สมาชิก/บริจาค)
+                        </div>
+                        <div class="table-cell">Licence fee ¥12,000‑24,000 / ครัวเรือน / ปี</div>
+                        <div class="table-cell font-bold">33 USD/คน</div>
+                    </div>
                     <div class="table-row highlight-row">
                         <div class="table-cell font-semibold">Thailand – Thai PBS</div>
                         <div class="table-cell">≈ 80 ล้าน USD<br>(2.84 bn THB)</div>
@@ -447,14 +454,19 @@
                 const cloudWidth = container.offsetWidth;
                 const cloudHeight = 400;
 
-                // Add a canvas with willReadFrequently=true to avoid warnings
-                d3.select('#wordCloudContainer')
-                    .append('canvas')
-                    .attr('width', 1)
-                    .attr('height', 1)
-                    .style('display', 'none')
-                    .node()
-                    .getContext('2d', { willReadFrequently: true });
+                // Create a hidden canvas element for d3.layout.cloud to use
+                const hiddenCanvas = document.createElement('canvas');
+                hiddenCanvas.width = cloudWidth;
+                hiddenCanvas.height = cloudHeight;
+                hiddenCanvas.style.display = 'none';
+                document.body.appendChild(hiddenCanvas);
+
+                // Remove any previous canvases to avoid memory leaks
+                const oldCanvases = document.querySelectorAll('canvas.word-cloud-helper');
+                oldCanvases.forEach(canvas => canvas.remove());
+
+                // Add class for potential cleanup later
+                hiddenCanvas.classList.add('word-cloud-helper');
 
                 // Configure the layout - store size separately
                 const cloudSize = [cloudWidth, cloudHeight];
@@ -469,13 +481,8 @@
                     .padding(5)
                     .font('Kanit')
                     .fontSize(d => d.size)
-                    .canvas(() => {
-                        // Create canvas with willReadFrequently=true
-                        const canvas = document.createElement('canvas');
-                        canvas.width = 1;
-                        canvas.height = 1;
-                        return canvas.getContext('2d', { willReadFrequently: true });
-                    })
+                    .rotate(d => d.rotate)
+                    .canvas(function () { return hiddenCanvas; })
                     .on('end', draw);
 
                 // Function to draw the word cloud - with fixed size reference
@@ -518,17 +525,36 @@
 
                 // Start the layout
                 layout.start();
+
+                // Clean up the hidden canvas after rendering
+                setTimeout(() => {
+                    if (hiddenCanvas && hiddenCanvas.parentNode) {
+                        hiddenCanvas.parentNode.removeChild(hiddenCanvas);
+                    }
+                }, 1000); // Give it time to complete rendering
             } catch (err) {
                 console.error("Error rendering word cloud:", err);
-                document.getElementById('wordCloudContainer').innerHTML = '<div class="flex items-center justify-center h-full"><p class="text-red-500">ข้อผิดพลาดในการแสดงข้อมูล: ' + err.message + '</p></div>';
+                // More detailed error message for easier debugging
+                const errorDetails = err.stack ? `<br><small>${err.stack.split('\n')[0]}</small>` : '';
+                document.getElementById('wordCloudContainer').innerHTML =
+                    `<div class="flex flex-col items-center justify-center h-full">
+                        <p class="text-red-500 mb-2">ข้อผิดพลาดในการแสดงข้อมูล: ${err.message}</p>
+                        <p class="text-red-400 text-xs">${errorDetails}</p>
+                    </div>`;
             }
         }
 
         // Function to fetch ideas from the API
         async function fetchIdeas() {
             try {
-                // Use the full URL to the API endpoint
-                const response = await fetch(window.location.origin + '/api/ideas');
+                // Check if we're running on 127.0.0.1:5500 and adjust the API path
+                let apiUrl = '/api/ideas';
+                if (window.location.hostname === '127.0.0.1' && window.location.port === '5500') {
+                    apiUrl = 'http://localhost:3000/api/ideas';
+                    console.log('Using direct API URL for local development:', apiUrl);
+                }
+
+                const response = await fetch(apiUrl);
                 if (!response.ok) {
                     throw new Error(`API responded with status: ${response.status}`);
                 }
@@ -563,8 +589,14 @@
             }
 
             try {
-                // Use the full URL to the API endpoint
-                const response = await fetch(window.location.origin + '/api/submit', {
+                // Check if we're running on 127.0.0.1:5500 and adjust the API path
+                let submitApiUrl = '/api/submit';
+                if (window.location.hostname === '127.0.0.1' && window.location.port === '5500') {
+                    submitApiUrl = 'http://localhost:3000/api/submit';
+                    console.log('Using direct API URL for local development form submission:', submitApiUrl);
+                }
+
+                const response = await fetch(submitApiUrl, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ idea })
@@ -610,7 +642,13 @@
         // Initial fetch
         document.addEventListener('DOMContentLoaded', function () {
             // First, check the API health
-            fetch(window.location.origin + '/api/health')
+            let healthApiUrl = '/api/health';
+            if (window.location.hostname === '127.0.0.1' && window.location.port === '5500') {
+                healthApiUrl = 'http://localhost:3000/api/health';
+                console.log('Using direct API URL for local development health check:', healthApiUrl);
+            }
+
+            fetch(healthApiUrl)
                 .then(response => response.json())
                 .then(health => {
                     console.log('API health status:', health);
